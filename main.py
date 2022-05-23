@@ -1,6 +1,7 @@
 import io
 import logging
 import os
+from typing import Mapping, Dict
 
 from dotenv import load_dotenv
 from pydub import AudioSegment
@@ -45,29 +46,61 @@ def respond_join_audio(update: Update, context: CallbackContext):
         logger.info("No appropriate smiles detected")
 
 
-def init_bot_data(bot_data: dict):
-    # format: <smile1>,<smile2>:<audio_path1>;<smile3>:<audio_path2>...
-    smile_to_audio_path = os.getenv('SMILE_TO_AUDIO_PATH', None)
-
+def parse_smiles_from_env(audio_dict: Dict[str, AudioSegment], smile_to_audio_path: str):
     if smile_to_audio_path is None:
-        bot_data['audio_mapping'] = {}
-    else:
-        bad_pairs = [pair for pair in smile_to_audio_path.split(';') if ':' not in pair]
-        if bad_pairs:
-            raise ValueError("Bad pairs, format: <smile1>,<smile2>:<audio_path1>;<smile3>:<audio_path2>...", bad_pairs)
+        return
 
-        bot_data['audio_mapping'] = {}
-        pairs = [pair.split(':') for pair in smile_to_audio_path.split(';') if pair]
-        for smiles, audio_path in pairs:
-            audio = AudioSegment.from_file(audio_path)
+    bad_pairs = [pair for pair in smile_to_audio_path.split(';') if ':' not in pair]
+    if bad_pairs:
+        raise ValueError("Bad pairs, format: <smile1>,<smile2>:<audio_path1>;<smile3>:<audio_path2>...", bad_pairs)
 
-            splitted_smiles = [smile for smile in smiles.split(',') if smile]
-            for smile in splitted_smiles:
-                if smile in bot_data['audio_mapping'].keys():
-                    raise ValueError('Repeated smile', smile)
+    logger.info("Parsing smiles from env...")
+    pairs = [pair.split(':') for pair in smile_to_audio_path.split(';') if pair]
+    for smiles, audio_path in pairs:
+        audio = AudioSegment.from_file(audio_path)
 
-                bot_data['audio_mapping'][smile] = audio
-        logger.debug("Appropriate smiles: %s", bot_data['audio_mapping'].keys())
+        splitted_smiles = [smile for smile in smiles.split(',') if smile]
+        for smile in splitted_smiles:
+            if smile in audio_dict.keys():
+                raise ValueError('Repeated smile', smile)
+
+            audio_dict[smile] = audio
+
+
+def parse_smiles_from_path(audio_dict: Dict[str, AudioSegment], one_smile_audios_dir: str):
+    if one_smile_audios_dir is None:
+        return
+
+    logger.info("Parsing smiles from directory...")
+    for file_name in os.listdir(one_smile_audios_dir):
+        file_path = os.path.join(one_smile_audios_dir, file_name)
+
+        if not os.path.isfile(file_path):
+            continue
+        if '.' not in file_name:
+            continue
+
+        smile = file_name[:file_name.find('.')]
+        if len(smile) != 1:
+            continue
+
+        if smile in audio_dict.keys():
+            raise ValueError('Repeated smile', smile)
+
+        audio_dict[smile] = AudioSegment.from_file(file_path)
+
+
+def init_bot_data(bot_data: dict):
+    bot_data['audio_mapping'] = {}
+
+    # format: <smile1>,<smile2>:<audio_path1>;<smile3>:<audio_path2>...
+    env_smiles = os.getenv('SMILE_TO_AUDIO_PATH', None)
+    parse_smiles_from_env(bot_data['audio_mapping'], env_smiles)
+
+    one_smile_audios_dir = os.getenv('ONE_SMILE_AUDIOS_DIR', None)
+    parse_smiles_from_path(bot_data['audio_mapping'], one_smile_audios_dir)
+
+    logger.info("Appropriate smiles: %s", bot_data['audio_mapping'].keys())
 
 
 def main() -> None:
