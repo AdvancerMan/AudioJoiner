@@ -1,0 +1,14 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+python-telegram-bot = "==13.11"
+python-dotenv = "==0.20.0"
+pydub = "==0.25.1"
+
+[dev-packages]
+
+[requires]
+python_version = "3.8"
